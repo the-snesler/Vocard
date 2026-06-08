@@ -343,6 +343,7 @@ class Player(VoiceProtocol):
             "token": state['event']['token'],
             "endpoint": state['event']['endpoint'],
             "sessionId": state['sessionId'],
+            "channelId": str(self.channel.id),
         }
         
         await self.send(method=RequestMethod.PATCH, data={"voice": data})
