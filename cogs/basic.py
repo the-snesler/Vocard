@@ -127,7 +127,7 @@ class Basic(commands.Cog):
     @app_commands.autocomplete(query=play_autocomplete)
     @commands.dynamic_cooldown(cooldown_check, commands.BucketType.guild)
     async def play(self, ctx: commands.Context, *, query: str, start: str = "0", end: str = "0") -> None:
-        "Loads your input and added it to the queue."
+        "Loads your input and adds it to the queue."
         player: voicelink.Player = ctx.guild.voice_client
         if not player:
             player = await voicelink.connect_channel(ctx)
@@ -222,7 +222,7 @@ class Basic(commands.Cog):
     ])
     @commands.dynamic_cooldown(cooldown_check, commands.BucketType.guild)
     async def search(self, ctx: commands.Context, *, query: str, platform: str = SearchType.YOUTUBE.name):
-        "Loads your input and added it to the queue."
+        "Loads your input and adds it to the queue."
         player: voicelink.Player = ctx.guild.voice_client
         if not player:
             player = await voicelink.connect_channel(ctx)
@@ -786,7 +786,7 @@ class Basic(commands.Cog):
         await send(ctx, "moved", moved_track, to)
 
     @commands.hybrid_command(name="lyrics", aliases=get_aliases("lyrics"))
-    @app_commands.describe(title="Searches for your query and displays the reutned lyrics.")
+    @app_commands.describe(title="Searches for your query and displays the returned lyrics.")
     @commands.dynamic_cooldown(cooldown_check, commands.BucketType.guild)
     async def lyrics(self, ctx: commands.Context, title: str = "", artist: str = ""):
         "Displays lyrics for the playing track."
