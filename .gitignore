@@ -177,3 +177,6 @@ cython_debug/
 # Custom file
 settings.json
 logs
+
+lavalink/
+mongodb_data/

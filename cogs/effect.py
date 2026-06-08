@@ -150,7 +150,7 @@ class Effect(commands.Cog):
         if player.filters.has_filter(filter_tag="distortion"):
             player.filters.remove_filter(filter_tag="distortion")
 
-        effect = voicelink.Distortion(tag="distortion", sin_offset=0.0, sin_scale=1.0, cos_offset=0.0, cos_scale=1.0, tan_offset=0.0, tan_scale=1.0, offset=0.0, scale=1.0)
+        effect = voicelink.Distortion(tag="distortion", sin_offset=0.0, sin_scale=1.0, cos_offset=0.0, cos_scale=0.0, tan_offset=0.0, tan_scale=0.5, offset=0.0, scale=1.0)
         await player.add_filter(effect, ctx.author)
         await send(ctx, "addEffect", effect.tag)
 
