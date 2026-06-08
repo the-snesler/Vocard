@@ -24,6 +24,7 @@ SOFTWARE.
 import discord
 import sys
 import os
+import asyncio
 import aiohttp
 import update
 import logging
@@ -98,18 +99,30 @@ class Vocard(commands.Bot):
 
         await self.process_commands(message)
 
-    async def connect_db(self) -> None:
+    async def connect_db(self, max_retries: int = 5, base_delay: float = 5.0) -> None:
         if not ((db_name := func.settings.mongodb_name) and (db_url := func.settings.mongodb_url)):
             raise Exception("MONGODB_NAME and MONGODB_URL can't not be empty in settings.json")
 
-        try:
-            func.MONGO_DB = AsyncIOMotorClient(host=db_url)
-            await func.MONGO_DB.server_info()
-            func.logger.info(f"Successfully connected to [{db_name}] MongoDB!")
-
-        except Exception as e:
-            func.logger.error("Not able to connect MongoDB! Reason:", exc_info=e)
-            exit()
+        for attempt in range(max_retries):
+            try:
+                func.MONGO_DB = AsyncIOMotorClient(host=db_url)
+                await func.MONGO_DB.server_info()
+                func.logger.info(f"Successfully connected to [{db_name}] MongoDB!")
+                break
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    delay = base_delay * (2 ** attempt)  # Exponential backoff
+                    func.logger.warning(
+                        f"MongoDB connection failed (attempt {attempt + 1}/{max_retries}): {e}. "
+                        f"Retrying in {delay:.1f}s..."
+                    )
+                    await asyncio.sleep(delay)
+                else:
+                    func.logger.error(
+                        f"Not able to connect MongoDB after {max_retries} attempts! Reason:",
+                        exc_info=e
+                    )
+                    exit()
 
         func.SETTINGS_DB = func.MONGO_DB[db_name]["Settings"]
         func.USERS_DB = func.MONGO_DB[db_name]["Users"]
@@ -135,7 +148,7 @@ class Vocard(commands.Bot):
         self.ipc = IPCClient(self, **func.settings.ipc_client)
         if func.settings.ipc_client.get("enable", False):
             try:
-                await self.ipc.connect()
+                await self.ipc.connect(with_retry=True)
             except Exception as e:
                 func.logger.error(f"Cannot connected to dashboard! - Reason: {e}")
 

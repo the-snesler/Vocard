@@ -42,14 +42,67 @@ class Listeners(commands.Cog):
     async def start_nodes(self) -> None:
         """Connect and intiate nodes."""
         for n in func.settings.nodes.values():
+            self.bot.loop.create_task(self._connect_node_with_retry(n))
+
+    async def _connect_node_with_retry(
+        self,
+        node_config: dict,
+        max_retries: int = 5,
+        base_delay: float = 5.0
+    ) -> None:
+        """Attempt to connect to a node with exponential backoff retry logic."""
+        identifier = node_config.get("identifier", "unknown")
+        
+        for attempt in range(max_retries):
             try:
                 await self.voicelink.create_node(
                     bot=self.bot,
                     logger=func.logger,
-                    **n
+                    **node_config
                 )
+                return  # Connection successful
             except Exception as e:
-                func.logger.error(f'Node {n["identifier"]} is not able to connect! - Reason: {e}')
+                delay = base_delay * (2 ** attempt)  # Exponential backoff: 5, 10, 20, 40, 80 seconds
+                if attempt < max_retries - 1:
+                    func.logger.warning(
+                        f'Node {identifier} connection failed (attempt {attempt + 1}/{max_retries}): {e}. '
+                        f'Retrying in {delay:.1f}s...'
+                    )
+                    await asyncio.sleep(delay)
+                else:
+                    func.logger.error(
+                        f'Node {identifier} is not able to connect after {max_retries} attempts! - Reason: {e}'
+                    )
+        
+        # Start background task to keep trying indefinitely after initial retries exhausted
+        self.bot.loop.create_task(self._background_node_reconnect(node_config))
+
+    async def _background_node_reconnect(self, node_config: dict) -> None:
+        """Background task that periodically attempts to reconnect a failed node."""
+        identifier = node_config.get("identifier", "unknown")
+        retry_interval = 60.0  # Check every 60 seconds
+        
+        while True:
+            await asyncio.sleep(retry_interval)
+            try:
+                # Check if node is already connected
+                try:
+                    existing_node = self.voicelink.get_node(identifier=identifier)
+                    if existing_node and existing_node.is_connected:
+                        func.logger.info(f'Node {identifier} is now connected, stopping reconnection task.')
+                        return
+                except:
+                    pass  # Node doesn't exist yet, proceed with connection
+                
+                await self.voicelink.create_node(
+                    bot=self.bot,
+                    logger=func.logger,
+                    **node_config
+                )
+                func.logger.info(f'Node {identifier} successfully reconnected!')
+                return
+            except Exception as e:
+                func.logger.debug(f'Background reconnect for node {identifier} failed: {e}')
 
     async def restore_last_session_players(self) -> None:
         """Re-establish connections for players from the last session."""

@@ -43,6 +43,9 @@ class IPCClient:
         }
 
     async def _listen(self) -> None:
+        backoff_base = 5.0
+        max_backoff = 300.0  # Max 5 minutes between retries
+        
         while True:
             try:
                 msg = await self._websocket.receive()
@@ -52,14 +55,22 @@ class IPCClient:
 
             if msg.type in [aiohttp.WSMsgType.CLOSE, aiohttp.WSMsgType.CLOSED]:
                 self._is_connected = False
-                self._logger.info("Connection closed. Trying to reconnect in 10s.")
-                await asyncio.sleep(10)
-
-                if not self._is_connected:
+                attempt = 0
+                
+                while not self._is_connected:
+                    delay = min(backoff_base * (2 ** attempt), max_backoff)
+                    self._logger.info(f"Connection closed. Trying to reconnect in {delay:.1f}s (attempt {attempt + 1})...")
+                    await asyncio.sleep(delay)
+                    
                     try:
                         await self.connect()
+                        if self._is_connected:
+                            self._logger.info("Successfully reconnected to dashboard!")
+                            break
                     except Exception as e:
-                        self._logger.error("Reconnection failed.")
+                        self._logger.warning(f"Reconnection attempt {attempt + 1} failed: {e}")
+                    
+                    attempt += 1
             else:
                 self._bot.loop.create_task(process_methods(self, self._bot, msg.json()))
 
@@ -101,13 +112,26 @@ class IPCClient:
         else:
             self._logger.error("Reconnection failed, not connected.")
                     
-    async def connect(self):    
+    async def connect(self, *, with_retry: bool = False, max_retries: int = 5, base_delay: float = 5.0):
+        """Connect to the dashboard websocket.
+        
+        Args:
+            with_retry: If True, will retry connection with exponential backoff.
+            max_retries: Maximum number of retry attempts.
+            base_delay: Base delay in seconds for exponential backoff.
+        """
+        if with_retry:
+            return await self._connect_with_retry(max_retries, base_delay)
+        return await self._connect_once()
+    
+    async def _connect_once(self):
+        """Single connection attempt without retry logic."""
         try:
             if not self._session:
                 self._session = aiohttp.ClientSession()
 
             if self._is_connecting or self._is_connected:
-                return
+                return self
             
             self._is_connecting = True
             self._websocket = await self._session.ws_connect(
@@ -132,6 +156,47 @@ class IPCClient:
             self._is_connecting = False
             
         return self
+    
+    async def _connect_with_retry(self, max_retries: int = 5, base_delay: float = 5.0):
+        """Connect with exponential backoff retry logic."""
+        for attempt in range(max_retries):
+            try:
+                await self._connect_once()
+                if self._is_connected:
+                    return self
+            except Exception as e:
+                pass  # Error already logged in _connect_once
+            
+            if attempt < max_retries - 1:
+                delay = base_delay * (2 ** attempt)  # Exponential backoff
+                self._logger.warning(
+                    f"Dashboard connection failed (attempt {attempt + 1}/{max_retries}). "
+                    f"Retrying in {delay:.1f}s..."
+                )
+                await asyncio.sleep(delay)
+            else:
+                self._logger.error(
+                    f"Failed to connect to dashboard after {max_retries} attempts. "
+                    "Will continue retrying in background."
+                )
+                # Start background reconnection task
+                self._bot.loop.create_task(self._background_reconnect())
+        
+        return self
+    
+    async def _background_reconnect(self):
+        """Background task that periodically attempts to reconnect."""
+        retry_interval = 60.0  # Check every 60 seconds
+        
+        while not self._is_connected:
+            await asyncio.sleep(retry_interval)
+            try:
+                await self._connect_once()
+                if self._is_connected:
+                    self._logger.info("Successfully reconnected to dashboard in background!")
+                    return
+            except Exception as e:
+                self._logger.debug(f"Background dashboard reconnect failed: {e}")
 
     async def disconnect(self) -> None:
         self._is_connected = False
