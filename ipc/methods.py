@@ -502,7 +502,7 @@ async def updatePlaylist(bot: commands.Bot, data: Dict) -> Dict:
         
         playlist = await _getPlaylist(user_id, playlist_id)
         if playlist['type'] in ['share', 'link']:
-            return error_msg("You cannot add songs to a linked playlist through Vocard.", user_id=user_id, level='error')
+            return error_msg("Cadence cannot add songs to a linked playlist.", user_id=user_id, level='error')
         
         rank, max_p, max_t = func.check_roles()
         if len(playlist['tracks']) >= max_t:
@@ -532,7 +532,7 @@ async def updatePlaylist(bot: commands.Bot, data: Dict) -> Dict:
             return error_msg("Playlist not found!", user_id=user_id, level='error')
         
         if playlist['type'] in ['share', 'link']:
-            return error_msg("You cannot remove songs from a linked playlist through Vocard.", user_id=user_id, level='error')
+            return error_msg("Cadence cannot remove songs from a linked playlist.", user_id=user_id, level='error')
         
         if not 0 <= track_position < len(playlist['tracks']):
             return error_msg("Cannot find the position from your playlist.", user_id=user_id, level="error")
@@ -622,7 +622,7 @@ async def getSettings(bot: commands.Bot, data: Dict) -> Dict:
 
     guild = bot.get_guild(guild_id)
     if not guild:
-        return error_msg("Vocard don't have access to requested guild.", user_id=user_id, level="error")
+        return error_msg("Cadence doesn't have access to requested guild.", user_id=user_id, level="error")
 
     member = guild.get_member(user_id)
     if not member:
@@ -677,7 +677,7 @@ async def updateSettings(bot: commands.Bot, data: Dict) -> None:
 
     guild = bot.get_guild(guild_id)
     if not guild:
-        return error_msg("Vocard don't have access to required guild.", user_id=user_id, level="error")
+        return error_msg("Cadence doesn't have access to required guild.", user_id=user_id, level="error")
 
     member = guild.get_member(user_id)
     if not member:
